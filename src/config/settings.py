@@ -3,16 +3,46 @@ navicane — Central configuration and constants.
 
 All hardware pin assignments, detection thresholds, and model paths
 are defined here so they can be changed in one place.
+
+Every path and toggle can be overridden via environment variables,
+which is how Docker injects configuration at runtime.
 """
 
 import os
 
-# ── Paths ────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_CUSTOM_PATH = os.path.join(BASE_DIR, "models", "best.pt")
-MODEL_FALLBACK_PATH = os.path.join(BASE_DIR, "models", "yolov8n.pt")
-LOG_PATH = os.path.join(BASE_DIR, "logs", "blind_stick.log")
+# ── Runtime mode ─────────────────────────────────────────────
+# NAVICANE_HEADLESS=1  → skip cv2.imshow (for Docker / systemd)
+# NAVICANE_MOCK=1      → use mock GPIO pin factory (for Mac dev)
+HEADLESS = os.environ.get("NAVICANE_HEADLESS", "0") == "1"
+MOCK_HARDWARE = os.environ.get("NAVICANE_MOCK", "0") == "1"
+
+# If mock mode requested, set gpiozero to use mock pin factory
+# (must be set BEFORE any gpiozero import)
+if MOCK_HARDWARE:
+    os.environ.setdefault("GPIOZERO_PIN_FACTORY", "mock")
+
+# ── Paths (overridable via env vars) ─────────────────────────
+BASE_DIR = os.environ.get(
+    "NAVICANE_BASE_DIR",
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+)
+MODEL_CUSTOM_PATH = os.environ.get(
+    "NAVICANE_MODEL_PATH",
+    os.path.join(BASE_DIR, "models", "best.pt"),
+)
+MODEL_FALLBACK_PATH = os.environ.get(
+    "NAVICANE_MODEL_FALLBACK",
+    os.path.join(BASE_DIR, "models", "yolov8n.pt"),
+)
+LOG_PATH = os.environ.get(
+    "NAVICANE_LOG_PATH",
+    os.path.join(BASE_DIR, "logs", "blind_stick.log"),
+)
 AUDIO_CACHE_DIR = os.path.join(BASE_DIR, "audio_cache")
+STOP_SIGNAL_PATH = os.environ.get(
+    "NAVICANE_STOP_SIGNAL",
+    "/tmp/stop_blind_stick",
+)
 
 # ── GPIO Pin Assignments ─────────────────────────────────────
 # Top Ultrasonic Sensor (Head Level)

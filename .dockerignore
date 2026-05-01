@@ -1,0 +1,27 @@
+# ── Ignore in Docker build context ───────────────────────────
+.git
+.gitignore
+.github
+*.md
+LICENSE
+
+# Development artifacts
+archive/
+docs/
+logs/*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+__pycache__
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# Drive download originals
+drive-download-*/
+
+# Don't ignore models/ — we COPY them into the image
+# Don't ignore scripts/ — useful inside the container

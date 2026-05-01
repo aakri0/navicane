@@ -1,0 +1,71 @@
+# ============================================================
+# navicane — Raspberry Pi production deployment
+#
+# This compose file maps ALL required hardware devices into the
+# container so GPIO, I2C, camera, and audio work transparently.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose logs -f navicane
+#   docker compose down
+# ============================================================
+
+services:
+  navicane:
+    image: ${DOCKERHUB_USER:-aakri0}/navicane:latest
+    container_name: navicane
+    restart: unless-stopped
+
+    # ── Hardware access ────────────────────────────────────
+    # privileged: true gives access to ALL host devices.
+    # For tighter security, use the 'devices' list below instead
+    # and comment out privileged.
+    privileged: true
+
+    # If you prefer explicit device mapping (comment out privileged above):
+    # devices:
+    #   - /dev/gpiomem:/dev/gpiomem         # GPIO (non-root)
+    #   - /dev/mem:/dev/mem                  # GPIO (fallback)
+    #   - /dev/i2c-1:/dev/i2c-1             # MPU-6050 I2C bus
+    #   - /dev/video0:/dev/video0           # Pi Camera V4L2
+    #   - /dev/video10:/dev/video10         # Pi Camera ISP input
+    #   - /dev/video11:/dev/video11         # Pi Camera ISP output
+    #   - /dev/video12:/dev/video12         # Pi Camera ISP stats
+    #   - /dev/video13:/dev/video13         # Pi Camera (front-end)
+    #   - /dev/video14:/dev/video14         # Pi Camera (back-end)
+    #   - /dev/video15:/dev/video15         # Pi Camera (stats)
+    #   - /dev/video16:/dev/video16         # Pi Camera (stats)
+    #   - /dev/media0:/dev/media0           # libcamera media device
+    #   - /dev/media1:/dev/media1           # libcamera media device
+    #   - /dev/media2:/dev/media2           # ISP media device
+    #   - /dev/snd:/dev/snd                 # ALSA audio (espeak)
+
+    # ── Volumes ────────────────────────────────────────────
+    volumes:
+      # Persist logs across container restarts
+      - navicane-logs:/app/logs
+      # Audio cache (pre-generated TTS files)
+      - navicane-audio:/app/audio_cache
+      # Share udev data for libcamera device detection
+      - /run/udev:/run/udev:ro
+
+    # ── Environment ────────────────────────────────────────
+    environment:
+      - NAVICANE_HEADLESS=1
+      - NAVICANE_MODEL_PATH=/app/models/best.pt
+      - NAVICANE_LOG_PATH=/app/logs/blind_stick.log
+
+    # ── Networking ─────────────────────────────────────────
+    network_mode: host    # needed for mDNS if GPS/network features added
+
+    # ── Resource limits (RPi 4 has 1-8 GB RAM) ─────────────
+    deploy:
+      resources:
+        limits:
+          memory: 1536M   # cap at 1.5 GB to leave room for OS
+        reservations:
+          memory: 512M
+
+volumes:
+  navicane-logs:
+  navicane-audio:

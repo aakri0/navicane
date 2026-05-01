@@ -2,18 +2,42 @@ import cv2
 import time
 import threading
 from collections import Counter
-from picamera2 import Picamera2
 from ultralytics import YOLO
 import os
-from gpiozero import DistanceSensor, OutputDevice
+import sys
 from time import sleep
 import smbus2
 import subprocess
 import logging
 
+# ── Load config (must happen before gpiozero imports) ────────
+# Adds the project root to sys.path so 'src.config' is importable
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from src.config.settings import (
+    MODEL_CUSTOM_PATH, MODEL_FALLBACK_PATH, LOG_PATH,
+    HEADLESS, MOCK_HARDWARE, STOP_SIGNAL_PATH,
+)
+
+# Now safe to import gpiozero (mock pin factory already set if needed)
+from gpiozero import DistanceSensor, OutputDevice
+
+# Import picamera2 only when real hardware is available
+if not MOCK_HARDWARE:
+    try:
+        from picamera2 import Picamera2
+    except ImportError:
+        print("⚠️  picamera2 not available — camera disabled")
+        Picamera2 = None
+else:
+    Picamera2 = None
+
 # Set up logging for debugging and monitoring
+os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
 logging.basicConfig(
-    filename='/home/pi/blind_stick.log',
+    filename=LOG_PATH,
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
@@ -71,9 +95,9 @@ def speak_text_offline(text, speed=150, voice='en'):
         logging.error(f"Speech error: {e}")
         print(f"Speech error: {e}")
 
-# Load your custom trained model from GitHub repository
+# Load YOLO model — path comes from config / env var
 try:
-    model = YOLO("/home/pi/interdesciplinary/models/best.pt")
+    model = YOLO(MODEL_CUSTOM_PATH)
     logging.info("Custom YOLOv8 model loaded successfully")
     print("✅ Custom YOLOv8 model loaded successfully")
     
@@ -89,7 +113,7 @@ except Exception as e:
     logging.error(f"Failed to load custom model: {e}")
     print(f"❌ Failed to load custom model: {e}")
     print("Falling back to standard YOLOv8 model...")
-    model = YOLO("yolov8n.pt")
+    model = YOLO(MODEL_FALLBACK_PATH)
 
 # Updated detection classes for your custom Indian Roads Detection model
 DETECTION_CLASSES = list(range(len(model.names)))  # Use all classes from your model
@@ -145,19 +169,24 @@ except Exception as e:
     logging.warning(f"Buzzer initialization failed: {e}")
     buzzer = None
 
-try:
-    picam2 = Picamera2()
-    picam2.preview_configuration.main.size = (1280, 720)
-    picam2.preview_configuration.main.format = "RGB888"
-    picam2.preview_configuration.align()
-    picam2.configure("preview")
-    picam2.start()
-    print("✅ Camera initialized successfully")
-    logging.info("Camera initialized successfully")
-except Exception as e:
-    print(f"❌ Camera initialization failed: {e}")
-    logging.error(f"Camera initialization failed: {e}")
-    exit(1)
+picam2 = None
+if Picamera2 is not None:
+    try:
+        picam2 = Picamera2()
+        picam2.preview_configuration.main.size = (1280, 720)
+        picam2.preview_configuration.main.format = "RGB888"
+        picam2.preview_configuration.align()
+        picam2.configure("preview")
+        picam2.start()
+        print("✅ Camera initialized successfully")
+        logging.info("Camera initialized successfully")
+    except Exception as e:
+        print(f"❌ Camera initialization failed: {e}")
+        logging.error(f"Camera initialization failed: {e}")
+        picam2 = None
+else:
+    print("ℹ️  Camera disabled (mock mode or picamera2 unavailable)")
+    logging.info("Camera disabled — running without live feed")
 
 # Parameters
 detection_threshold = 1.0
@@ -416,7 +445,7 @@ def main():
         frame_count = 0
         while True:
             # Check for stop signal file
-            if os.path.exists('/tmp/stop_blind_stick'):
+            if os.path.exists(STOP_SIGNAL_PATH):
                 logging.info("Stop signal file detected")
                 break
                 
@@ -457,19 +486,25 @@ def main():
 
             # Object detection using custom model
             try:
-                frame = picam2.capture_array()
-                results = model(frame, conf=confidence_threshold)
+                if picam2 is not None:
+                    frame = picam2.capture_array()
+                    results = model(frame, conf=confidence_threshold)
+                else:
+                    # No camera — skip detection this cycle
+                    time.sleep(0.1)
+                    continue
                 
-                # For headless operation, comment out the next 4 lines
-                annotated_frame = results[0].plot()
-                cv2.putText(annotated_frame, f"Top: {distance_top:.2f}m", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.putText(annotated_frame, f"Bottom: {distance_bottom:.2f}m", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 200, 255), 2)
-                cv2.putText(annotated_frame, "Custom YOLOv8 - OFFLINE", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-                
-                if elevation_detected:
-                    cv2.putText(annotated_frame, "ELEVATION ALERT ACTIVE", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-                
-                cv2.imshow("Smart Blind Stick - Indian Roads Detection", annotated_frame)
+                # GUI display (skipped in headless / Docker mode)
+                if not HEADLESS:
+                    annotated_frame = results[0].plot()
+                    cv2.putText(annotated_frame, f"Top: {distance_top:.2f}m", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    cv2.putText(annotated_frame, f"Bottom: {distance_bottom:.2f}m", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 200, 255), 2)
+                    cv2.putText(annotated_frame, "Custom YOLOv8 - OFFLINE", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                    
+                    if elevation_detected:
+                        cv2.putText(annotated_frame, "ELEVATION ALERT ACTIVE", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                    
+                    cv2.imshow("Smart Blind Stick - Indian Roads Detection", annotated_frame)
                 
             except Exception as e:
                 logging.error(f"Camera/detection error: {e}")
@@ -492,10 +527,12 @@ def main():
                         speak_detection_results(detected_objects, "ground")
                     last_detection_time = current_time
 
-            # For headless operation, comment out the next 2 lines and uncomment the sleep
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-            # time.sleep(0.05)  # Uncomment for headless operation
+            # Handle exit: GUI key press or headless sleep
+            if not HEADLESS:
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                time.sleep(0.05)
             
             frame_count += 1
             if frame_count % 1000 == 0:
@@ -515,8 +552,10 @@ def cleanup_system():
     try:
         if buzzer:
             buzzer.off()
-        picam2.stop()
-        cv2.destroyAllWindows()
+        if picam2 is not None:
+            picam2.stop()
+        if not HEADLESS:
+            cv2.destroyAllWindows()
         print("✅ Smart Blind Stick System stopped successfully.")
         logging.info("System cleanup completed successfully")
         

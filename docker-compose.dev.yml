@@ -1,0 +1,38 @@
+# ============================================================
+# navicane — Mac development override
+#
+# Runs the application on an Apple Silicon Mac with mock
+# hardware.  No GPIO, I2C, or camera hardware is required.
+#
+# Usage (from repo root):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# ============================================================
+
+services:
+  navicane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Override: NOT privileged on Mac (no hardware to access)
+    privileged: false
+
+    # Override: no host devices
+    devices: []
+
+    # Override: mock hardware mode
+    environment:
+      - NAVICANE_HEADLESS=1
+      - NAVICANE_MOCK=1
+      - NAVICANE_MODEL_PATH=/app/models/best.pt
+      - NAVICANE_LOG_PATH=/app/logs/blind_stick.log
+      - GPIOZERO_PIN_FACTORY=mock
+
+    # Override: use bridge networking on Mac
+    network_mode: bridge
+
+    # Override: mount source for live editing during development
+    volumes:
+      - ./src:/app/src:ro
+      - ./models:/app/models:ro
+      - navicane-logs:/app/logs
