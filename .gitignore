@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+navicane-env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs (keep the directory, ignore contents)
+logs/*.log
+
+# Audio cache (generated at runtime)
+audio_cache/
+
+# Model weights (large binary files)
+models/*.pt
+models/*.onnx
+
+# Drive download originals (archived, no longer needed in tree)
+drive-download-*/
+
+# Large reference PDFs (not project source)
+docs/RPi_BeginnersGuide.pdf
+
+# Temporary runtime files
+/tmp/
+*.mp3
