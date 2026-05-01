@@ -8,6 +8,10 @@ numpy>=1.24,<2.0
 gpiozero>=2.0
 smbus2>=0.4
 
+# GPS (Issue #17)
+pyserial>=3.5
+pynmea2>=1.19
+
 # Camera (RPi-specific — installed separately in Dockerfile via system packages)
 # picamera2  ← handled by apt, not pip
 

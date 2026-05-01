@@ -60,9 +60,20 @@ BUZZER_ACTIVE_HIGH = False      # PNP transistor: active-low
 # ── MPU-6050 IMU (I2C) ──────────────────────────────────────
 MPU6050_ADDR = 0x68
 MPU6050_PWR_MGMT_1 = 0x6B
+# Gyroscope registers
 MPU6050_GYRO_XOUT_H = 0x43
 MPU6050_GYRO_YOUT_H = 0x45
 MPU6050_GYRO_ZOUT_H = 0x47
+# Accelerometer registers (Issue #14 — fall detection)
+MPU6050_ACCEL_XOUT_H = 0x3B
+MPU6050_ACCEL_YOUT_H = 0x3D
+MPU6050_ACCEL_ZOUT_H = 0x3F
+MPU6050_ACCEL_SCALE = 16384.0    # LSB/g at ±2g default range
+
+# ── Fall Detection (Issue #14) ───────────────────────────────
+FALL_FREEFALL_THRESHOLD_G = 0.5   # below this = free-fall
+FALL_IMPACT_THRESHOLD_G = 2.5     # above this = impact
+FALL_WINDOW_MS = 500              # both events within this window = fall
 
 # ── Detection Parameters ────────────────────────────────────
 DETECTION_THRESHOLD_M = 1.0       # metres — alert if object closer than this
@@ -82,6 +93,27 @@ ELEVATION_THRESHOLDS = {
 # ── TTS ──────────────────────────────────────────────────────
 TTS_SPEED = 150                   # espeak words-per-minute
 TTS_VOICE = "en"
+
+# ── Audio cache — phrases to pre-generate at startup ─────────
+CACHED_PHRASES = [
+    "Obstacle ahead",
+    "Car detected ahead",
+    "Bus detected ahead",
+    "Person detected ahead",
+    "Truck detected ahead",
+    "Fall detected, are you okay",
+    "Smart stick ready",
+    "GPS signal not available",
+    "Obstacle at 30 centimetres",
+    "Obstacle at 50 centimetres",
+    "Obstacle at 80 centimetres",
+    "Obstacle at 100 centimetres",
+]
+
+# ── GPS (Issue #17) ──────────────────────────────────────────
+GPS_SERIAL_PORT = os.environ.get("NAVICANE_GPS_PORT", "/dev/ttyAMA0")
+GPS_BAUD_RATE = 9600
+GPS_ANNOUNCE_INTERVAL_S = 30      # seconds between location announcements
 
 # ── Camera ───────────────────────────────────────────────────
 CAMERA_RESOLUTION = (1280, 720)
