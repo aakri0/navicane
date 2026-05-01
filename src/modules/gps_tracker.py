@@ -80,7 +80,7 @@ def setup():
 
 def stop():
     """Stop the reader thread and close the serial port."""
-    global _running, _serial
+    global _running
     _running = False
     if _serial and _serial.is_open:
         _serial.close()
