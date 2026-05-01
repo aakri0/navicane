@@ -57,6 +57,31 @@ ULTRASONIC_BOTTOM_ECHO = 24     # GPIO24 (Pin 18)
 BUZZER_PIN = 5                  # GPIO5 (Pin 29)
 BUZZER_ACTIVE_HIGH = False      # PNP transistor: active-low
 
+# Indoor/Outdoor toggle button (Issue #27)
+MODE_TOGGLE_PIN = 6             # GPIO6 (Pin 31) — momentary push button
+MODE_DEFAULT = os.environ.get("NAVICANE_MODE", "outdoor")  # "indoor" or "outdoor"
+
+# ── Indoor / Outdoor sensitivity profiles (Issue #27) ────────
+SENSITIVITY_PROFILES = {
+    "indoor": {
+        "detection_threshold_m": 0.6,   # closer range indoors
+        "confidence_threshold": 0.4,    # higher confidence needed
+        "detection_cooldown_s": 3,      # faster alerts
+        "elevation_cooldown_s": 1.5,
+        "camera_resolution": (640, 480),  # lower res, faster inference
+    },
+    "outdoor": {
+        "detection_threshold_m": 1.0,   # full range
+        "confidence_threshold": 0.3,    # lower threshold for distant objects
+        "detection_cooldown_s": 5,
+        "elevation_cooldown_s": 2,
+        "camera_resolution": (1280, 720),
+    },
+}
+
+# ── Sensor loop timing ───────────────────────────────────────
+SENSOR_POLL_INTERVAL_S = 0.05     # 20 Hz sensor polling
+
 # ── MPU-6050 IMU (I2C) ──────────────────────────────────────
 MPU6050_ADDR = 0x68
 MPU6050_PWR_MGMT_1 = 0x6B
