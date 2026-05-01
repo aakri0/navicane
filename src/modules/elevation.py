@@ -39,11 +39,11 @@ class ElevationDetector:
 
             if vertical_change >= ELEVATION_THRESHOLDS["small_step"]:
                 elevation_type = "Small step or drop detected"
-                alert_type = "short_buzzer"
+                alert_type = "buzz"
 
             if vertical_change >= ELEVATION_THRESHOLDS["large_step"]:
                 elevation_type = "Large step or drop detected"
-                alert_type = "vibration_voice"
+                alert_type = "vibrate+speak"
 
             if len(self._history) >= 3:
                 recent = [
@@ -56,11 +56,11 @@ class ElevationDetector:
                 ):
                     if elevation_type is None:
                         elevation_type = "Uneven terrain detected"
-                        alert_type = "mild_vibration"
+                        alert_type = "vibrate"
 
         if abs(gy) >= ELEVATION_THRESHOLDS["steep_slope"]:
             elevation_type = "Steep slope detected"
-            alert_type = "voice_alert"
+            alert_type = "speak"
 
         self._prev_distance = current_distance
         return elevation_type, alert_type

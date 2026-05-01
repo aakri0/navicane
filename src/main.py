@@ -19,6 +19,10 @@ if _project_root not in sys.path:
 from src.config.settings import (
     MODEL_CUSTOM_PATH, MODEL_FALLBACK_PATH, LOG_PATH,
     HEADLESS, MOCK_HARDWARE, STOP_SIGNAL_PATH,
+    DETECTION_THRESHOLD_M, CONFIDENCE_THRESHOLD, DETECTION_COOLDOWN_S,
+    ELEVATION_COOLDOWN_S, ELEVATION_THRESHOLDS,
+    MPU6050_ADDR, MPU6050_PWR_MGMT_1,
+    MPU6050_GYRO_XOUT_H, MPU6050_GYRO_YOUT_H, MPU6050_GYRO_ZOUT_H,
 )
 
 # Now safe to import gpiozero (mock pin factory already set if needed)
@@ -115,32 +119,10 @@ except Exception as e:
     print("Falling back to standard YOLOv8 model...")
     model = YOLO(MODEL_FALLBACK_PATH)
 
-# Updated detection classes for your custom Indian Roads Detection model
-DETECTION_CLASSES = list(range(len(model.names)))  # Use all classes from your model
-
-# Updated categories for Indian road objects
-CLASS_CATEGORIES = {
-    'person': [0],  # Adjust indices based on your actual model
-    'vehicles': [1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 18],  # Various vehicles
-    'animals': [10, 11, 12, 13, 14],  # cattle, goat, dog, camel, horse
-    'infrastructure': [15, 16, 19, 20, 21, 22, 29, 30],  # barriers, signs, poles
-    'hazards': [23],  # manhole
-    'nature': [24, 25, 35],  # vegetation, tree
-    'buildings': [26, 27, 33],  # building, wall
-    'emergency': [9],  # ambulance
-    'traffic': [19, 28, 32],  # traffic signals, police, crossings
-}
-
-# Gyroscope (MPU6050) setup
-MPU6050_ADDR = 0x68
-PWR_MGMT_1 = 0x6B
-GYRO_XOUT_H = 0x43
-GYRO_YOUT_H = 0x45
-GYRO_ZOUT_H = 0x47
-
+# Gyroscope (MPU6050) setup — constants come from config
 try:
     bus = smbus2.SMBus(1)
-    bus.write_byte_data(MPU6050_ADDR, PWR_MGMT_1, 0)
+    bus.write_byte_data(MPU6050_ADDR, MPU6050_PWR_MGMT_1, 0)
     gyroscope_available = True
     print("✅ MPU6050 gyroscope initialized successfully")
     logging.info("MPU6050 gyroscope initialized successfully")
@@ -188,21 +170,13 @@ else:
     print("ℹ️  Camera disabled (mock mode or picamera2 unavailable)")
     logging.info("Camera disabled — running without live feed")
 
-# Parameters
-detection_threshold = 1.0
-confidence_threshold = 0.3  # Lowered for custom model
-buzzer_duration = 3
+# Parameters — use values from central config
+detection_threshold = DETECTION_THRESHOLD_M
+confidence_threshold = CONFIDENCE_THRESHOLD
 last_detection_time = 0
 last_elevation_time = 0
-elevation_cooldown = 2
-
-# Elevation detection thresholds
-elevation_thresholds = {
-    'small_step': 0.025,
-    'large_step': 0.10,
-    'uneven_terrain': 0.015,
-    'steep_slope': 10.0
-}
+elevation_cooldown = ELEVATION_COOLDOWN_S
+elevation_thresholds = ELEVATION_THRESHOLDS
 
 prev_distance_top = None
 prev_distance_bottom = None
@@ -228,31 +202,13 @@ def get_gyro_data():
     if not gyroscope_available:
         return 0, 0, 0
     try:
-        gx = read_raw_data(GYRO_XOUT_H) / 131.0
-        gy = read_raw_data(GYRO_YOUT_H) / 131.0
-        gz = read_raw_data(GYRO_ZOUT_H) / 131.0
+        gx = read_raw_data(MPU6050_GYRO_XOUT_H) / 131.0
+        gy = read_raw_data(MPU6050_GYRO_YOUT_H) / 131.0
+        gz = read_raw_data(MPU6050_GYRO_ZOUT_H) / 131.0
         return gx, gy, gz
     except Exception as e:
         logging.error(f"Error getting gyroscope data: {e}")
         return 0, 0, 0
-
-def categorize_detected_objects(detected_objects):
-    """Categorize detected objects for better announcements"""
-    categorized = {}
-    for obj_name in detected_objects:
-        obj_class_id = None
-        for class_id, class_name in model.names.items():
-            if class_name == obj_name:
-                obj_class_id = class_id
-                break
-        if obj_class_id is not None:
-            for category, class_ids in CLASS_CATEGORIES.items():
-                if obj_class_id in class_ids:
-                    if category not in categorized:
-                        categorized[category] = []
-                    categorized[category].append(obj_name)
-                    break
-    return categorized
 
 def detect_elevation_changes(current_distance, prev_distance, distance_history, gx, gy, gz):
     """Detect elevation changes using distance and gyroscope data"""
@@ -367,42 +323,28 @@ def extract_detected_objects(results):
     return detected_objects
 
 def speak_detection_results(objects_list, level):
-    """Convert detection results to speech with categorized announcements"""
+    """Convert detection results to speech announcements.
+
+    Uses a simple Counter since the custom model has flat class names
+    (Ambulance, Bus, Car, Tempo, Tractor, Truck) — no category grouping needed.
+    """
     if not objects_list:
         return
     try:
-        categorized = categorize_detected_objects(objects_list)
-        if not categorized:
-            return
-            
-        category_announcements = []
-        for category, objects in categorized.items():
-            object_counts = Counter(objects)
-            if len(object_counts) == 1:
-                obj, count = list(object_counts.items())[0]
-                if count == 1:
-                    category_announcements.append(f"1 {obj}")
-                else:
-                    category_announcements.append(f"{count} {obj}s")
+        object_counts = Counter(objects_list)
+        parts = []
+        for obj, count in object_counts.items():
+            if count == 1:
+                parts.append(f"1 {obj}")
             else:
-                obj_descriptions = []
-                for obj, count in object_counts.items():
-                    if count == 1:
-                        obj_descriptions.append(obj)
-                    else:
-                        obj_descriptions.append(f"{count} {obj}s")
-                category_announcements.append(f"{category}: {', '.join(obj_descriptions)}")
-                
-        if level == "head":
-            prefix = "At head level: "
-        else:
-            prefix = "At ground level: "
-            
-        speech_text = prefix + f"Detected: {', '.join(category_announcements)}"
+                parts.append(f"{count} {obj}s")
+
+        prefix = "At head level: " if level == "head" else "At ground level: "
+        speech_text = prefix + f"Detected: {', '.join(parts)}"
         print(f"🔊 Speaking objects: {speech_text}")
         logging.info(f"Object detection speech: {speech_text}")
         speak_text_offline(speech_text)
-        
+
     except Exception as e:
         logging.error(f"Detection speech error: {e}")
         print(f"Speech error: {e}")
