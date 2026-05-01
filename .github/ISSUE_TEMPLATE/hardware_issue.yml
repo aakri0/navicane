@@ -1,0 +1,38 @@
+name: Hardware Issue
+description: Report a hardware, wiring, or sensor problem
+title: "[Hardware]: "
+labels: ["hardware"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for issues related to wiring, sensor readings, or component failures.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      options:
+        - Ultrasonic Sensor (Top)
+        - Ultrasonic Sensor (Bottom)
+        - MPU-6050 (IMU)
+        - Camera (Picamera2)
+        - GPS (Neo-6M)
+        - Buzzer/Vibration
+        - Battery/Power
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Problem
+      description: What is happening? Be specific about symptoms.
+    validations:
+      required: true
+  - type: textarea
+    id: wiring
+    attributes:
+      label: Wiring Details
+      description: How is the component wired? Which GPIO pins are you using?
+    validations:
+      required: true
